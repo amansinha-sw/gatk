@@ -153,13 +153,15 @@ public class AnnotatedIntervalUtils {
      *
      *  No checking is done to ensure that this will leave the copy with any annotations.
      *  No checking is done to ensure that any of the annotationsToPreserve are actually in the annotatedInterval.
-     * TODO: Finish docs
-     * TODO: make tests
-     * @param annotatedInterval
-     * @param annotationsToPreserve
-     * @return
+     *
+     * @param annotatedInterval Never {@code null}
+     * @param annotationsToPreserve Never {@code null}
+     * @return a new copy of the annotated interval that contains only annotations in the annotations to preserve.
+     *  If the input annotated interval had no annotations in the list to preserve, this copy will have no annotations.
      */
     public static AnnotatedInterval copyAnnotatedInterval(final AnnotatedInterval annotatedInterval, final Set<String> annotationsToPreserve) {
+        Utils.nonNull(annotatedInterval);
+        Utils.nonNull(annotationsToPreserve);
 
         final SortedMap<String, String> copiedAnnotations = annotatedInterval.getAnnotations().entrySet().stream()
                 .filter(e -> annotationsToPreserve.contains(e.getKey()))

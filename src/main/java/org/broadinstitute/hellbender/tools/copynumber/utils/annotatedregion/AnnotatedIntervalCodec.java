@@ -99,10 +99,10 @@ public class AnnotatedIntervalCodec extends AsciiFeatureCodec<AnnotatedInterval>
      *  See {@link #createHeaderForWriter(Path, List, SAMFileHeader)}
      *
      *  This will use the default headers for annotated regions.  Call this method if no config file is available.
-     * //TODO: Fill in the docs.
-     * @param annotations
-     * @param samFileHeader
-     * @return
+     *
+     * @param annotations Annotations that should be used in the header.  Never {@code null}.
+     * @param samFileHeader SAM File header to use for this header.  {@code null} is allowed.
+     * @return A header to be used for output.  Never {@code null}
      */
     public static AnnotatedIntervalHeader createHeaderForWriter(final List<String> annotations, final SAMFileHeader samFileHeader) {
         Utils.nonNull(annotations);

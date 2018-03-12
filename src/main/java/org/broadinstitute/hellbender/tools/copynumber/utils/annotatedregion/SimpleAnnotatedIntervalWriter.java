@@ -84,7 +84,6 @@ public class SimpleAnnotatedIntervalWriter implements AnnotatedIntervalWriter {
         this.endColumnHeader = endColumnName;
     }
 
-    // TODO: Test the scenario where input file has no sam file header.  Make sure output has something.
     @Override
     public void writeHeader(final AnnotatedIntervalHeader annotatedIntervalHeader) {
         if (!hasHeaderBeenWritten) {

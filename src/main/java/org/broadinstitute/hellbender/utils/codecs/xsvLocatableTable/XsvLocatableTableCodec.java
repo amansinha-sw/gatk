@@ -41,14 +41,13 @@ import java.util.stream.IntStream;
  *      delimiter
  *      name
  *
- * These tables are assumed to have comment lines that start with `#` and a header that has the names for each
- * column in the table as the top row.
- *
- *  This reader also supports a SAM File Header prepended to the xsv.
+ * These tables are assumed to have preamble lines that start with `#` (comments) or '@' (SAM File Header) and a header that has the names for each
+ * column in the table as the top row.  The type of preamble (comments vs. SAM File header) is detected automatically.
+ * Heterogeneous preambles (mix of '#' and '@') are not supported and will cause an exception to be thrown.
  *
  * Two or three columns will specify the location of each row in the data (contig, start, end; start and end can be the same
  * column).
- * TODO: Describe preamble -- only supports SamFileHeader or #, but it will autodetect
+ *
  * Created by jonn on 12/4/17.
  */
 public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeature> {
@@ -59,7 +58,6 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
     // Public Static Members:
 
     private static final String COMMENT_DELIMITER = "#";
-    private static final String DEFAULT_PREAMBLE_START_DELIMITER = COMMENT_DELIMITER;
 
     public static final String CONFIG_FILE_CONTIG_COLUMN_KEY = "contig_column";
     public static final String CONFIG_FILE_START_COLUMN_KEY = "start_column";
@@ -120,7 +118,7 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
     /** Comments or SamFileHeader, if any.  Never {@code null}.  */
     private List<String> preamble = new ArrayList<>();
 
-    /** Will hold starting string for preamble lines */
+    /** Will hold starting string for preamble lines. */
     private String preambleLineStart;
 
     //==================================================================================================================
@@ -409,7 +407,7 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
             if (eq) {
                 return "@";
             } else {
-                return "#";
+                return COMMENT_DELIMITER;
             }
         } catch ( final IOException e ) {
             throw new UserException.CouldNotReadInputFile("Could not read file: " + path.toString(), e);

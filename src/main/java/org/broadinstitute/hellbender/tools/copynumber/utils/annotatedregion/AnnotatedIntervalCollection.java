@@ -120,20 +120,16 @@ public class AnnotatedIntervalCollection {
 
                 warnAllHeadersOfInterestNotPresent(headersOfInterest, header.getAnnotations());
 
-                final Set<String> finalHeaders = (headersOfInterest == null) ? new HashSet<>(header.getAnnotations()) : headersOfInterest;
+                // If no headers of interest were specified, then grab all available annotations.  Otherwise, just get a sorted list of the specified headers of interest.
+                final List<String> finalHeadersOfInterest = (headersOfInterest == null) ? header.getAnnotations() : headersOfInterest.stream().sorted().collect(Collectors.toList());
 
                 final CloseableTribbleIterator<AnnotatedInterval> it = reader.iterator();
                 StreamSupport.stream(it.spliterator(), false)
                         .filter(r -> r != null)
-                        //TODO: Handle the null headers of interest case.  Or break out into a subsetting method.
-                        .map(r -> AnnotatedIntervalUtils.copyAnnotatedInterval(r,  finalHeaders))
+                        .map(r -> AnnotatedIntervalUtils.copyAnnotatedInterval(r,  new HashSet<>(finalHeadersOfInterest)))
                         .forEach(r -> regions.add(r));
 
-                final SAMFileHeader samFileHeader = header.getSamFileHeader();
-                final List<String> finalAnnotations = header.getAnnotations().stream()
-                        .filter(h -> (headersOfInterest == null) || headersOfInterest.contains(h))
-                        .collect(Collectors.toList());
-                return new AnnotatedIntervalCollection(samFileHeader, finalAnnotations, regions);
+                return new AnnotatedIntervalCollection(header.getSamFileHeader(), finalHeadersOfInterest, regions);
 
             } catch ( final IOException ex ) {
                 throw new GATKException("Error - IO problem with file " + input, ex);
