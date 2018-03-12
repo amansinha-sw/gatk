@@ -19,12 +19,12 @@ public class SimpleAnnotatedIntervalWriterUnitTest extends GATKBaseTest {
             "copynumber/utils/annotatedregion/old-header.config");
 
     @Test
-    public void testNullSamFileHeader() throws IOException {
-        final File outputFile = File.createTempFile("simpleannotatedintervalwriter_", ".tsv");
+    public void testNoSamFileHeaderWithComments() throws IOException {
+        final File outputFile = File.createTempFile("simpleannotatedintervalwriter_no_samheader", ".tsv");
         final AnnotatedIntervalCollection collection = AnnotatedIntervalCollection.create(TEST_FILE_NO_SAMHEADER.toPath(), null);
 
         final SimpleAnnotatedIntervalWriter writer = new SimpleAnnotatedIntervalWriter(outputFile);
-        writer.writeHeader(AnnotatedIntervalCodec.createHeaderForWriter(collection.getAnnotations(), null));
+        writer.writeHeader(AnnotatedIntervalCodec.createHeaderForWriter(collection.getAnnotations(), collection.getSamFileHeader()));
         collection.getRecords().forEach(r -> writer.add(r));
         writer.close();
 
