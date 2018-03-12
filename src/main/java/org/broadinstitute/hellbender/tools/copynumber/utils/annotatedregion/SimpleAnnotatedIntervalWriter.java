@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.copynumber.utils.annotatedregion;
 
 import com.google.common.collect.Lists;
 import htsjdk.samtools.SAMFileHeader;
+import htsjdk.samtools.SAMTextHeaderCodec;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.exceptions.GATKException;
@@ -94,9 +95,9 @@ public class SimpleAnnotatedIntervalWriter implements AnnotatedIntervalWriter {
 
                     // Remove old structured comments, if present.
                     final List<String> commentsToWrite = samFileHeader.getComments().stream()
-                            .filter(c -> !c.startsWith(CONTIG_COL_COMMENT))
-                            .filter(c -> !c.startsWith(START_COL_COMMENT))
-                            .filter(c -> !c.startsWith(END_COL_COMMENT)).collect(Collectors.toList());
+                            .filter(c -> !c.startsWith(SAMTextHeaderCodec.COMMENT_PREFIX + CONTIG_COL_COMMENT))
+                            .filter(c -> !c.startsWith(SAMTextHeaderCodec.COMMENT_PREFIX + START_COL_COMMENT))
+                            .filter(c -> !c.startsWith(SAMTextHeaderCodec.COMMENT_PREFIX + END_COL_COMMENT)).collect(Collectors.toList());
 
                     // Write out the column headers as a comment
                     commentsToWrite.add(CONTIG_COL_COMMENT + annotatedIntervalHeader.getContigColumnName());

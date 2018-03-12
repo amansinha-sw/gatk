@@ -66,7 +66,7 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
     public static final String CONFIG_FILE_END_COLUMN_KEY = "end_column";
     public static final String CONFIG_FILE_DELIMITER_KEY = "xsv_delimiter";
     public static final String CONFIG_FILE_DATA_SOURCE_NAME_KEY = "name";
-    public static final String SAM_FILE_HEADER_START = "@HD\tVN:1.5";
+    public static final String SAM_FILE_HEADER_START = "@HD\tVN:";
 
 
     //==================================================================================================================
