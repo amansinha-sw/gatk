@@ -1,35 +1,27 @@
 package org.broadinstitute.hellbender.tools.copynumber.utils.annotatedregion;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMTextHeaderCodec;
-import htsjdk.samtools.util.BufferedLineReader;
-import htsjdk.samtools.util.LineReader;
-import htsjdk.tribble.readers.AsciiLineReader;
-import htsjdk.tribble.readers.AsciiLineReaderIterator;
-import htsjdk.tribble.readers.LineIterator;
+import htsjdk.tribble.AbstractFeatureReader;
+import htsjdk.tribble.CloseableTribbleIterator;
+import htsjdk.tribble.FeatureReader;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
-import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.codecs.xsvLocatableTable.XsvLocatableTableCodec;
-import org.broadinstitute.hellbender.utils.codecs.xsvLocatableTable.XsvTableFeature;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
 import org.broadinstitute.hellbender.utils.io.Resource;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
 
 /**
  * Represents a collection of annotated regions.  The annotations do not need to be known ahead of time, if reading from a file.
@@ -76,22 +68,7 @@ public class AnnotatedIntervalCollection {
         }
     }
 
-    /**
-     *  Returns a copy of the given annotated interval, but only with the annotations to preserve.
-     *
-     *  No checking is done to ensure that this will leave the copy with any annotations.
-     *  No checking is done to ensure that any of the annotationsToPreserve are actually in the annotatedInterval.
-     *
-     * @param annotatedInterval
-     * @param annotationsToPreserve
-     * @return
-     */
-    private static AnnotatedInterval copyAnnotatedInterval(final AnnotatedInterval annotatedInterval, final List<String> annotationsToPreserve) {
-        final SortedMap<String, String> copiedAnnotations = annotatedInterval.getAnnotations().entrySet().stream()
-                .filter(e -> annotationsToPreserve.contains(e.getKey()))
-                .collect(TreeMap::new, (map, e) -> map.put(e.getKey(), e.getValue()), (map, map2) -> map.putAll(map2));
-        return new AnnotatedInterval(annotatedInterval.getInterval(), copiedAnnotations);
-    }
+
 
     /**
      * Create a collection from components.
@@ -99,7 +76,7 @@ public class AnnotatedIntervalCollection {
      * @param regions regions to use in the resulting collection.  Never {@code null}.
      * @param samFileHeader SAMFileHeader to include in the collection.  Represents the sample(s)/references that were used for these segments.
      *                      {@code null} is allowed.
-     * @param annotations List of annotations to preserve in the regions.  Never {@code null}.  These are the only annotations that will be written.
+     * @param annotations List of annotations to preserve in the regions.  Never {@code null}.  These are the only annotations that will be preserved in the returned collection.
      * @return collection based on the inputs.  Never {@code null}.
      */
     public static AnnotatedIntervalCollection create(final List<AnnotatedInterval> regions,
@@ -109,7 +86,8 @@ public class AnnotatedIntervalCollection {
         Utils.nonNull(regions);
         Utils.nonNull(annotations);
 
-        final List<AnnotatedInterval> updatedAnnotatedIntervals = regions.stream().map(r -> copyAnnotatedInterval(r, annotations))
+        final List<AnnotatedInterval> updatedAnnotatedIntervals = regions.stream()
+                .map(r -> AnnotatedIntervalUtils.copyAnnotatedInterval(r, new HashSet<>(annotations)))
                 .collect(Collectors.toList());
 
         return new AnnotatedIntervalCollection(samFileHeader, annotations, updatedAnnotatedIntervals);
@@ -130,69 +108,39 @@ public class AnnotatedIntervalCollection {
         IOUtils.assertFileIsReadable(input);
         IOUtils.assertFileIsReadable(inputConfigFile);
 
-        final XsvLocatableTableCodec codec = new XsvLocatableTableCodec(inputConfigFile);
+        final AnnotatedIntervalCodec codec = new AnnotatedIntervalCodec(inputConfigFile);
         final List<AnnotatedInterval> regions = new ArrayList<>();
 
-        if (codec.canDecode(input.toString())) {
-            try (final InputStream fileInputStream = Files.newInputStream(input)) {
+        if (codec.canDecode(input.toUri().toString())) {
+            try (final FeatureReader<AnnotatedInterval> reader = AbstractFeatureReader.getFeatureReader(input.toUri().toString(), codec, false)){
 
-                // Lots of scaffolding to do reading here:
-                final AsciiLineReaderIterator lineReaderIterator = new AsciiLineReaderIterator(AsciiLineReader.from(fileInputStream));
-                final List<String> header = codec.readActualHeader(lineReaderIterator);
-                warnAllHeadersOfInterestNotPresent(headersOfInterest, header);
+                // This cast is an artifact of the tribble framework.
+                @SuppressWarnings("unchecked")
+                final AnnotatedIntervalHeader header = (AnnotatedIntervalHeader) reader.getHeader();
 
-                final List<String> annotationCols = codec.getHeaderWithoutLocationColumns();
+                warnAllHeadersOfInterestNotPresent(headersOfInterest, header.getAnnotations());
 
-                while (lineReaderIterator.hasNext()) {
-                    final XsvTableFeature feature = codec.decode(lineReaderIterator.next());
-                    if (feature == null) {
-                        continue;
-                    }
+                final Set<String> finalHeaders = (headersOfInterest == null) ? new HashSet<>(header.getAnnotations()) : headersOfInterest;
 
-                    final List<String> featureValues = feature.getValuesWithoutLocationColumns();
+                final CloseableTribbleIterator<AnnotatedInterval> it = reader.iterator();
+                StreamSupport.stream(it.spliterator(), false)
+                        .filter(r -> r != null)
+                        //TODO: Handle the null headers of interest case.  Or break out into a subsetting method.
+                        .map(r -> AnnotatedIntervalUtils.copyAnnotatedInterval(r,  finalHeaders))
+                        .forEach(r -> regions.add(r));
 
-                    final SortedMap<String, String> annotations = new TreeMap<>();
-                    IntStream.range(0, annotationCols.size()).boxed()
-                            .filter(i -> (headersOfInterest == null) || headersOfInterest.contains(annotationCols.get(i)))
-                            .forEach(i -> annotations.put(annotationCols.get(i), featureValues.get(i)));
+                final SAMFileHeader samFileHeader = header.getSamFileHeader();
+                final List<String> finalAnnotations = header.getAnnotations().stream()
+                        .filter(h -> (headersOfInterest == null) || headersOfInterest.contains(h))
+                        .collect(Collectors.toList());
+                return new AnnotatedIntervalCollection(samFileHeader, finalAnnotations, regions);
 
-                    regions.add(new AnnotatedInterval(
-                            new SimpleInterval(feature.getContig(), feature.getStart(), feature.getEnd()),
-                            annotations));
-                }
-
-                final SAMFileHeader samFileHeader = createSamFileHeader(codec);
-                return new AnnotatedIntervalCollection(samFileHeader, codec.getHeaderWithoutLocationColumns(), regions);
-
-            }
-            catch ( final FileNotFoundException ex ) {
-                throw new GATKException("Error - could not find file: " + input, ex);
-            }
-            catch ( final IOException ex ) {
+            } catch ( final IOException ex ) {
                 throw new GATKException("Error - IO problem with file " + input, ex);
             }
         }
         else {
             throw new UserException.BadInput("Could not parse xsv file.");
-        }
-    }
-
-    /**
-     * Create a SAM File header from a given xsv codec.  This will determine how to handle the preamble automatically.
-     * May generate an empty SAMFileHeader.
-     *
-     * @param codec xsvLocatable codec that has already been initialized ({@link XsvLocatableTableCodec#canDecode(String)}
-     *              and {@link XsvLocatableTableCodec#readActualHeader(LineIterator)} have already been called.
-     * @return Never {@code null}
-     */
-    private static SAMFileHeader createSamFileHeader(final XsvLocatableTableCodec codec) {
-        Utils.nonNull(codec);
-        //TODO: Magic constant.
-        if ((codec.getPreamble().size() > 0) && (codec.getPreamble().get(0).startsWith(XsvLocatableTableCodec.SAM_FILE_HEADER_START))) {
-            final List<String> samHeaderAsString = codec.getPreamble().stream().map(p -> codec.getPreambleLineStart() + p).collect(Collectors.toList());
-            return createSamFileHeader(samHeaderAsString);
-        } else {
-            return createSamFileHeaderWithCommentsOnly(codec.getPreamble());
         }
     }
 
@@ -215,7 +163,7 @@ public class AnnotatedIntervalCollection {
      */
     public void write(final File outputFile) {
         final AnnotatedIntervalWriter writer = new SimpleAnnotatedIntervalWriter(outputFile);
-        writer.writeHeader(AnnotatedIntervalUtils.createHeaderForWriter(annotations, samFileHeader));
+        writer.writeHeader(AnnotatedIntervalCodec.createHeaderForWriter(annotations, samFileHeader));
         getRecords().forEach(writer::add);
         writer.close();
     }
@@ -230,8 +178,7 @@ public class AnnotatedIntervalCollection {
         if (getSamFileHeader() == null) {
             return Collections.emptyList();
         } else {
-            // TODO: magic constant
-            return getSamFileHeader().getComments().stream().map(c -> c.replaceFirst("@CO\t", "")).collect(Collectors.toList());
+            return getSamFileHeader().getComments().stream().map(c -> c.replaceFirst(SAMTextHeaderCodec.COMMENT_PREFIX, "")).collect(Collectors.toList());
         }
     }
 
@@ -245,30 +192,5 @@ public class AnnotatedIntervalCollection {
 
     public int size() {
         return getRecords().size();
-    }
-
-    /**
-     * @return copy of the sam file header created from the input file.  {@code null} is not possible
-     */
-    @VisibleForTesting
-    static SAMFileHeader createSamFileHeader(final List<String> samFileHeaderAsStrings) {
-
-        final LineReader reader = BufferedLineReader.fromString(StringUtils.join(samFileHeaderAsStrings, "\n"));
-        final SAMTextHeaderCodec codec = new SAMTextHeaderCodec();
-        return codec.decode(reader, null);
-    }
-
-    @VisibleForTesting
-    static SAMFileHeader createSamFileHeaderWithCommentsOnly(final List<String> comments) {
-        final LineReader reader = BufferedLineReader.fromString("");
-        final SAMTextHeaderCodec codec = new SAMTextHeaderCodec();
-        final SAMFileHeader result = codec.decode(reader, null);
-
-        final List<String> finalComments = new ArrayList<>();
-        finalComments.addAll(result.getComments());
-        finalComments.addAll(comments);
-        result.setComments(finalComments);
-
-        return result;
     }
 }

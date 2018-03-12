@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.copynumber.utils.annotatedregion;
 
 import com.google.common.collect.ImmutableSortedMap;
 import htsjdk.samtools.util.Locatable;
+import htsjdk.tribble.Feature;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 
 import java.util.SortedMap;
@@ -9,7 +10,7 @@ import java.util.SortedMap;
 /**
  * Simple class that just has an interval and sorted name-value pairs.
  */
-public final class AnnotatedInterval implements Locatable  {
+public final class AnnotatedInterval implements Locatable, Feature {
 
     private final SimpleInterval interval;
     private final SortedMap<String, String> annotations;
@@ -23,8 +24,6 @@ public final class AnnotatedInterval implements Locatable  {
     public SimpleInterval getInterval() {
         return new SimpleInterval(this.interval);
     }
-
-
 
     @Override
     public String getContig() {

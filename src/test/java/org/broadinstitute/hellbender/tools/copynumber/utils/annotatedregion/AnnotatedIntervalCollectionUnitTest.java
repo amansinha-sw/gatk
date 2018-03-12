@@ -13,7 +13,6 @@ import org.testng.annotations.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -153,19 +152,9 @@ public class AnnotatedIntervalCollectionUnitTest extends GATKBaseTest {
         assertLearningSampleTest(headersOfInterest, simpleAnnotatedGenomicRegions);
     }
 
-    @Test()
+    @Test
     public void testCreateSamFileHeaderComments() {
         final AnnotatedIntervalCollection collection = AnnotatedIntervalCollection.create(TEST_SAM_COMMENTS_FILE.toPath(), null);
         Assert.assertEquals(collection.getComments(), Arrays.asList("foo", "foo2 baz"));
-    }
-
-    @Test()
-    public void testCreateSamFileHeaderWithCommentsOnly() {
-        final SAMFileHeader emptyHeader = AnnotatedIntervalCollection.createSamFileHeader(Collections.emptyList());
-        final SAMFileHeader header = AnnotatedIntervalCollection.createSamFileHeaderWithCommentsOnly(Arrays.asList("This is a comment"));
-        Assert.assertEquals(header.getComments(), Arrays.asList("@CO\tThis is a comment"));
-        Assert.assertEquals(header.getReadGroups(), emptyHeader.getReadGroups());
-        Assert.assertEquals(header.getSequenceDictionary(), emptyHeader.getSequenceDictionary());
-        Assert.assertEquals(header.getSortOrder(), emptyHeader.getSortOrder());
     }
 }

@@ -24,7 +24,7 @@ public class SimpleAnnotatedIntervalWriterUnitTest extends GATKBaseTest {
         final AnnotatedIntervalCollection collection = AnnotatedIntervalCollection.create(TEST_FILE_NO_SAMHEADER.toPath(), null);
 
         final SimpleAnnotatedIntervalWriter writer = new SimpleAnnotatedIntervalWriter(outputFile);
-        writer.writeHeader(AnnotatedIntervalUtils.createHeaderForWriter(collection.getAnnotations(), null));
+        writer.writeHeader(AnnotatedIntervalCodec.createHeaderForWriter(collection.getAnnotations(), null));
         collection.getRecords().forEach(r -> writer.add(r));
         writer.close();
 

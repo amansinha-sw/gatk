@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.utils.codecs.xsvLocatableTable;
 
+import htsjdk.samtools.SAMFileHeader;
 import htsjdk.tribble.readers.AsciiLineReader;
 import htsjdk.tribble.readers.AsciiLineReaderIterator;
 import org.broadinstitute.hellbender.GATKBaseTest;
@@ -35,6 +36,10 @@ public class XsvLocatableTableCodecUnitTest extends GATKBaseTest {
     /** Uses column names, instead of index */
     private static final String TEST_FILE3 = TEST_RESOURCE_DIR + "xsv_locatable_test3.csv";
     private static final String TEST_FILE_NO_CONFIG = TEST_RESOURCE_DIR + "xsv_locatable_test_no_config.csv";
+
+    // Preambles of SAMFileHeaders or just plain ol' comments
+    private static final String TEST_FILE_SAMFILEHEADER = TEST_RESOURCE_DIR + "xsv_locatable_test_samfileheader.csv";
+    private static final String TEST_FILE_SAMFILEHEADER_CONFIG = TEST_RESOURCE_DIR + "xsv_locatable_test_samfileheader_no_config.csv";
 
     private static final List<String> file1Headers = Arrays.asList("XSV_LOCATABLE_TEST_NAME_Villain", "XSV_LOCATABLE_TEST_NAME_chr", "XSV_LOCATABLE_TEST_NAME_test_val", "XSV_LOCATABLE_TEST_NAME_start", "XSV_LOCATABLE_TEST_NAME_end", "XSV_LOCATABLE_TEST_NAME_Bond");
     private static final List<String> file1Line1 = Arrays.asList("Blofeld", "chr19", "test_val_chr19", "8959519", "9092018", "Connery");
@@ -215,5 +220,57 @@ public class XsvLocatableTableCodecUnitTest extends GATKBaseTest {
         final Properties properties = XsvLocatableTableCodec.getAndValidateConfigFileContents(configFilePath);
         Assert.assertEquals(properties, expected);
     }
+
+    @Test
+    public void testRenderSamFileHeaderFromNoPreamble() {
+        final XsvLocatableTableCodec xsvLocatableTableCodec = new XsvLocatableTableCodec();
+        final String filePath = TEST_FILE3;
+        readHeaderOnly(xsvLocatableTableCodec, filePath);
+
+        final SAMFileHeader emptyHeader = xsvLocatableTableCodec.renderSamFileHeader();
+
+        Assert.assertEquals(emptyHeader.getComments().size(), 0);
+        Assert.assertEquals(emptyHeader.getReadGroups().size(), 0);
+        Assert.assertEquals(emptyHeader.getSequenceDictionary().size(), 0);
+    }
+
+    private List<String> readHeaderOnly(final XsvLocatableTableCodec xsvLocatableTableCodec, final String filePath) {
+        List<String> header = null;
+
+        if (xsvLocatableTableCodec.canDecode(filePath)) {
+
+            try ( final FileInputStream fileInputStream = new FileInputStream(filePath)) {
+                final AsciiLineReaderIterator lineReaderIterator = new AsciiLineReaderIterator(AsciiLineReader.from(fileInputStream));
+                header = xsvLocatableTableCodec.readActualHeader(lineReaderIterator);
+            }
+            catch ( final FileNotFoundException ex ) {
+                throw new GATKException("Error - could not find test file: " + filePath, ex);
+            }
+            catch ( final IOException ex ) {
+                throw new GATKException("Error - IO problem with file " + filePath, ex);
+            }
+        }
+
+        return header;
+    }
+
+    @Test
+    public void testRenderSamFileHeaderFromSamFileHeaderPreamble() {
+        final XsvLocatableTableCodec xsvLocatableTableCodec = new XsvLocatableTableCodec();
+        final String filePath = TEST_FILE_SAMFILEHEADER;
+        readHeaderOnly(xsvLocatableTableCodec, filePath);
+
+        final SAMFileHeader populatedHeader = xsvLocatableTableCodec.renderSamFileHeader();
+
+        Assert.assertEquals(populatedHeader.getSequenceDictionary().size(), 1);
+        Assert.assertEquals(populatedHeader.getSequenceDictionary().getSequence(0).getSequenceLength(), 1000000);
+        Assert.assertNotNull(populatedHeader.getReadGroup("GATKCopyNumber"));
+        Assert.assertEquals(populatedHeader.getReadGroup("GATKCopyNumber").getSample(), "sample_cars");
+        Assert.assertEquals(populatedHeader.getComments(), Arrays.asList("@CO\tCars, cars, and cars",
+                "@CO\tNo \"family cars\" in this list."));
+    }
+
+    // TODO: Tests for the different preambles
+    // TODO: Test for mixed preamble and fail.
 
 }

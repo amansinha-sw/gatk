@@ -1,7 +1,12 @@
 package org.broadinstitute.hellbender.utils.codecs.xsvLocatableTable;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import htsjdk.samtools.SAMFileHeader;
+import htsjdk.samtools.SAMTextHeaderCodec;
+import htsjdk.samtools.util.BufferedLineReader;
+import htsjdk.samtools.util.LineReader;
 import htsjdk.samtools.util.StringUtil;
 import htsjdk.tribble.AsciiFeatureCodec;
 import htsjdk.tribble.readers.LineIterator;
@@ -188,6 +193,11 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
                 split.remove( split.size() - 1 );
             }
         }
+        // HACK: For tribble to work properly, we need to know the position (in bytes) of the file pointer.  Currently, that cannot be ascertained.
+        // HACK:  this code will just detect if the header is being read again and ignore it.
+        else if ((header != null) && ( IntStream.range(0, split.size()).allMatch(i -> header.get(i).equals(split.get(i))))) {
+            return null;
+        }
 
         return new XsvTableFeature(headerToIndex.get(finalContigColumn), headerToIndex.get(finalStartColumn),
                 headerToIndex.get(finalEndColumn), header, split, dataSourceName);
@@ -356,7 +366,7 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
     /**
      * Creates a copy of the internal preamble upon each invocation.
      *
-     * @return an immutable list of all of the comment lines in the xsv
+     * @return an immutable list of all of the preamble lines in the xsv
      */
     public ImmutableList<String> getPreamble() {
         return ImmutableList.copyOf(preamble);
@@ -387,16 +397,12 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
         Utils.validateArg(!NumberUtils.isNumber(columnName), "column header cannot be a number: " + columnName);
     }
 
-    public String getPreambleLineStart() {
-        return preambleLineStart;
-    }
-
     private String determinePreambleLineStart(final Path path) {
 
         try (final InputStream stream = Files.newInputStream(path)){
 
             byte[] buff = new byte[SAM_FILE_HEADER_START.length()];
-            int nread = stream.read(buff, 0, SAM_FILE_HEADER_START.length());
+            stream.read(buff, 0, SAM_FILE_HEADER_START.length());
             final boolean eq = Arrays.equals(buff, SAM_FILE_HEADER_START.getBytes());
 
             // TODO: Remove magic constants
@@ -408,5 +414,68 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
         } catch ( final IOException e ) {
             throw new UserException.CouldNotReadInputFile("Could not read file: " + path.toString(), e);
         }
+    }
+
+    /**
+     * TODO: Docs
+     * Must be called after {@link #readActualHeader(LineIterator)}
+     * This method will return an empty SAMFileHeader if the preamble was empty.
+     * @return Always returns a SAMFileHeader, even if it is empty or comments only.  Never {@code null}
+     */
+    public SAMFileHeader renderSamFileHeader() {
+
+        if (isPreambleSamFileHeader(getPreamble())) {
+            final List<String> samHeaderAsString = getPreamble().stream().map(p -> preambleLineStart + p).collect(Collectors.toList());
+            return createSamFileHeader(samHeaderAsString);
+        } else {
+            return createSamFileHeaderWithCommentsOnly(getPreamble());
+        }
+    }
+
+    private boolean isPreambleSamFileHeader(final List<String> preamble) {
+        if ((preamble == null) || (preamble.size() == 0)) {
+            return false;
+        }
+
+        final String testPreambleFirstLine =  preambleLineStart + preamble.get(0);
+        return testPreambleFirstLine.startsWith(XsvLocatableTableCodec.SAM_FILE_HEADER_START);
+    }
+
+    /**
+     * @return copy of the sam file header created from the given list of strings.  {@code null} is not possible
+     */
+    @VisibleForTesting
+    static SAMFileHeader createSamFileHeader(final List<String> samFileHeaderAsStrings) {
+
+        final LineReader reader = BufferedLineReader.fromString(StringUtils.join(samFileHeaderAsStrings, "\n"));
+        final SAMTextHeaderCodec codec = new SAMTextHeaderCodec();
+        return codec.decode(reader, null);
+    }
+
+    @VisibleForTesting
+    static SAMFileHeader createSamFileHeaderWithCommentsOnly(final List<String> comments) {
+        final LineReader reader = BufferedLineReader.fromString("");
+        final SAMTextHeaderCodec codec = new SAMTextHeaderCodec();
+        final SAMFileHeader result = codec.decode(reader, null);
+
+        final List<String> finalComments = new ArrayList<>();
+        finalComments.addAll(result.getComments());
+        finalComments.addAll(comments);
+        result.setComments(finalComments);
+
+        return result;
+    }
+
+    // TODO: Put comments about how the header must have already been run to use this method.
+    public String getContigColumn() {
+        return finalContigColumn;
+    }
+
+    public String getStartColumn() {
+        return finalStartColumn;
+    }
+
+    public String getEndColumn() {
+        return finalEndColumn;
     }
 }

@@ -130,7 +130,6 @@ public class LocatableXsvFuncotationFactory extends DataSourceFuncotationFactory
             if (codec.canDecode(dataPath.toString())) {
                 try (final InputStream fileInputStream = Files.newInputStream(dataPath)) {
 
-                    // Lots of scaffolding to do reading here:
                     final AsciiLineReaderIterator lineReaderIterator = new AsciiLineReaderIterator(AsciiLineReader.from(fileInputStream));
                     codec.readActualHeader(lineReaderIterator);
                     header = codec.getHeaderWithoutLocationColumns();

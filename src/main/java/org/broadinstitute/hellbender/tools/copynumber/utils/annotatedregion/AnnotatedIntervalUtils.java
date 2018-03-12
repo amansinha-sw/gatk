@@ -1,33 +1,24 @@
 package org.broadinstitute.hellbender.tools.copynumber.utils.annotatedregion;
 
 import com.google.common.collect.Sets;
-import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.util.Locatable;
 import htsjdk.samtools.util.PeekableIterator;
 import org.apache.commons.lang3.StringUtils;
-import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.IntervalUtils;
 import org.broadinstitute.hellbender.utils.SimpleInterval;
 import org.broadinstitute.hellbender.utils.Utils;
-import org.broadinstitute.hellbender.utils.codecs.xsvLocatableTable.XsvLocatableTableCodec;
-import org.broadinstitute.hellbender.utils.io.Resource;
 
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
-
-import static org.broadinstitute.hellbender.utils.codecs.xsvLocatableTable.XsvLocatableTableCodec.getAndValidateConfigFileContents;
 
 public class AnnotatedIntervalUtils {
 
     // Can't instantiate this class.
     private AnnotatedIntervalUtils() {}
 
-    /** Merge SimpleAnnotatedGenomicRegions by whether the regions overlap.  Sorting is performed as well, so input
+    /** Merge AnnotatedIntervals by whether the regions overlap.  Sorting is performed as well, so input
      * ordering is lost.
      *
      * When two overlapping regions are merged, annotations are merged as follows:
@@ -158,52 +149,21 @@ public class AnnotatedIntervalUtils {
     }
 
     /**
-     *  See {@link #createHeaderForWriter(Path, List, SAMFileHeader)}
+     *  Returns a copy of the given annotated interval, but only with the annotations to preserve.
      *
-     *  This will use the default headers for annotated regions.  Call this method if no config file is available.
-     * //TODO: Fill in the docs.
-     * @param annotations
-     * @param samFileHeader
+     *  No checking is done to ensure that this will leave the copy with any annotations.
+     *  No checking is done to ensure that any of the annotationsToPreserve are actually in the annotatedInterval.
+     * TODO: Finish docs
+     * TODO: make tests
+     * @param annotatedInterval
+     * @param annotationsToPreserve
      * @return
      */
-    public static AnnotatedIntervalHeader createHeaderForWriter(final List<String> annotations, final SAMFileHeader samFileHeader) {
-        Utils.nonNull(annotations);
+    public static AnnotatedInterval copyAnnotatedInterval(final AnnotatedInterval annotatedInterval, final Set<String> annotationsToPreserve) {
 
-        try {
-            final Path resourceFile = Resource.getResourceContentsAsFile(AnnotatedIntervalCollection.ANNOTATED_INTERVAL_DEFAULT_CONFIG_RESOURCE).toPath();
-            return createHeaderForWriter(resourceFile, annotations, samFileHeader);
-        } catch (final IOException ioe) {
-            throw new GATKException.ShouldNeverReachHereException("Could not load the default config file for annotated intervals.", ioe);
-        }
-    }
-
-    /**
-     * Create an annotated interval header based on a config file (for locatable field names only) and a list of annotations (the rest of the fields).
-     *
-     * @param outputConfigFile config path for determining the locatable column headers.  Never {@code null}.
-     * @param annotations  Names of the annotations to render.  If any of the locatable columns are in the annotation, those columns will be removed from the annotations list in the header.
-     *                     Never {@code null}.
-     * @param samFileHeader SAM FileHeader to prepend to the data.  {@code null} is allowed.
-     * @return a header that can be used in an AnnotatedFileWriter.  Never {@code null}.
-     */
-    public static AnnotatedIntervalHeader createHeaderForWriter(final Path outputConfigFile, final List<String> annotations, final SAMFileHeader samFileHeader) {
-
-        Utils.nonNull(annotations);
-        Utils.nonNull(outputConfigFile);
-
-        final Properties headerNameProperties = getAndValidateConfigFileContents(outputConfigFile);
-        final String contigColumnName = headerNameProperties.getProperty(XsvLocatableTableCodec.CONFIG_FILE_CONTIG_COLUMN_KEY);
-        final String startColumnName = headerNameProperties.getProperty(XsvLocatableTableCodec.CONFIG_FILE_START_COLUMN_KEY);
-        final String endColumnName = headerNameProperties.getProperty(XsvLocatableTableCodec.CONFIG_FILE_END_COLUMN_KEY);
-
-        XsvLocatableTableCodec.validateLocatableColumnName(contigColumnName);
-        XsvLocatableTableCodec.validateLocatableColumnName(startColumnName);
-        XsvLocatableTableCodec.validateLocatableColumnName(endColumnName);
-
-        final List<String> finalAnnotations = annotations.stream()
-                .filter(a -> !a.equals(contigColumnName) && !a.equals(startColumnName) && !a.equals(endColumnName))
-                .collect(Collectors.toList());
-
-        return new AnnotatedIntervalHeader(contigColumnName, startColumnName, endColumnName, finalAnnotations, samFileHeader);
+        final SortedMap<String, String> copiedAnnotations = annotatedInterval.getAnnotations().entrySet().stream()
+                .filter(e -> annotationsToPreserve.contains(e.getKey()))
+                .collect(TreeMap::new, (map, e) -> map.put(e.getKey(), e.getValue()), (map, map2) -> map.putAll(map2));
+        return new AnnotatedInterval(annotatedInterval.getInterval(), copiedAnnotations);
     }
 }
