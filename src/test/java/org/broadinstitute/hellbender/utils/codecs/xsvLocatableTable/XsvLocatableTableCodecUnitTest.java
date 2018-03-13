@@ -38,8 +38,11 @@ public class XsvLocatableTableCodecUnitTest extends GATKBaseTest {
     private static final String TEST_FILE_NO_CONFIG = TEST_RESOURCE_DIR + "xsv_locatable_test_no_config.csv";
 
     // Preambles of SAMFileHeaders or just plain ol' comments
-    private static final String TEST_FILE_SAMFILEHEADER = TEST_RESOURCE_DIR + "xsv_locatable_test_samfileheader.csv";
-    private static final String TEST_FILE_SAMFILEHEADER_CONFIG = TEST_RESOURCE_DIR + "xsv_locatable_test_samfileheader_no_config.csv";
+    private static final String TEST_FILE_SAMFILEHEADER = TEST_RESOURCE_DIR + "xsv_locatable_test_samfileheader.tsv";
+    private static final String TEST_FILE_SAMFILEHEADER_CONFIG = TEST_RESOURCE_DIR + "xsv_locatable_test_samfileheader.config";
+
+    private static final String TEST_FILE_MIXED_PREAMBLE = TEST_RESOURCE_DIR + "xsv_locatable_test_mixed_preamble.tsv";
+    private static final String TEST_FILE_MIXED_PREAMBLE_CONFIG = TEST_RESOURCE_DIR + "xsv_locatable_test_mixed_preamble.config";
 
     private static final List<String> file1Headers = Arrays.asList("XSV_LOCATABLE_TEST_NAME_Villain", "XSV_LOCATABLE_TEST_NAME_chr", "XSV_LOCATABLE_TEST_NAME_test_val", "XSV_LOCATABLE_TEST_NAME_start", "XSV_LOCATABLE_TEST_NAME_end", "XSV_LOCATABLE_TEST_NAME_Bond");
     private static final List<String> file1Line1 = Arrays.asList("Blofeld", "chr19", "test_val_chr19", "8959519", "9092018", "Connery");
@@ -258,7 +261,7 @@ public class XsvLocatableTableCodecUnitTest extends GATKBaseTest {
     public void testRenderSamFileHeaderFromSamFileHeaderPreamble() {
         final XsvLocatableTableCodec xsvLocatableTableCodec = new XsvLocatableTableCodec();
         final String filePath = TEST_FILE_SAMFILEHEADER;
-        readHeaderOnly(xsvLocatableTableCodec, filePath);
+        Assert.assertNotNull(readHeaderOnly(xsvLocatableTableCodec, filePath), "Header could not be decoded, but it should have been okay.");
 
         final SAMFileHeader populatedHeader = xsvLocatableTableCodec.renderSamFileHeader();
 
@@ -270,7 +273,11 @@ public class XsvLocatableTableCodecUnitTest extends GATKBaseTest {
                 "@CO\tNo \"family cars\" in this list."));
     }
 
-    // TODO: Tests for the different preambles
-    // TODO: Test for mixed preamble and fail.
-
+    @Test
+    public void testFalseCanDecodeFromMixedPreambles() {
+        // Test that if we read a preamble that is mixed ("#" and "@"), we return a false for canDecode.
+        final XsvLocatableTableCodec xsvLocatableTableCodec = new XsvLocatableTableCodec();
+        final String filePath = TEST_FILE_MIXED_PREAMBLE;
+        Assert.assertFalse(xsvLocatableTableCodec.canDecode(filePath));
+    }
 }

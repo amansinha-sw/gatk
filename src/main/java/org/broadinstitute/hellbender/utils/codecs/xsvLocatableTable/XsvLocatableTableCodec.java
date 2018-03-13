@@ -14,6 +14,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.Utils;
 import org.broadinstitute.hellbender.utils.io.IOUtils;
@@ -120,6 +121,8 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
 
     /** Will hold starting string for preamble lines. */
     private String preambleLineStart;
+
+    private boolean isHeaderInitialized = false;
 
     //==================================================================================================================
     // Constructors:
@@ -242,6 +245,7 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
                 locatableColumns = Lists.newArrayList(finalContigColumn, finalStartColumn, finalEndColumn);
 
                 assertLocatableColumnsInHeaderToIndex(locatableColumns, headerToIndex);
+                isHeaderInitialized = true;
                 return header;
 
             } else {
@@ -259,6 +263,12 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
         if (missingColumns.size() > 0) {
             final String missingColumnsString = StringUtil.join(", ", missingColumns);
             throw new UserException.BadInput("Error in input file: cannot find the locatable column(s): " + missingColumnsString + ", though these were specified in the parsing configuration.  Do those columns need to be added to the input file?  Do you have a heterogenous preamble (e.g. lines that start with both '#' and '@') before the headers?  Does each line of your preamble start with the correct string ('" + preambleLineStart + "')?");
+        }
+    }
+
+    private void assertHeaderInitialized() {
+        if (!isHeaderInitialized) {
+            throw new GATKException.ShouldNeverReachHereException("Method that needs an initialized header was called before header was initialized.");
         }
     }
 
@@ -363,17 +373,19 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
 
     /**
      * Creates a copy of the internal preamble upon each invocation.
+     * {@link #readActualHeader(LineIterator)} must have been called or this method will throw an exception.
      *
      * @return an immutable list of all of the preamble lines in the xsv
      */
     public ImmutableList<String> getPreamble() {
+        assertHeaderInitialized();
         return ImmutableList.copyOf(preamble);
     }
 
     /**
      * Get the header from this {@link XsvLocatableTableCodec} without the columns that contain location information.
      *
-     * {@link #readActualHeader(LineIterator)} must have been called before this method.
+     * {@link #readActualHeader(LineIterator)} must have been called before this method.  Otherwise, exception will be thrown.
      *
      * Specifically the columns specified by the following fields are not included:
      *  {@link XsvLocatableTableCodec#inputContigColumn}
@@ -382,6 +394,7 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
      * @return The header for this {@link XsvLocatableTableCodec} without location columns.
      */
     public List<String> getHeaderWithoutLocationColumns() {
+        assertHeaderInitialized();
         return header.stream().filter(h -> !locatableColumns.contains(h))
                 .collect(Collectors.toList());
     }
@@ -415,13 +428,14 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
     }
 
     /**
-     * TODO: Docs
-     * Must be called after {@link #readActualHeader(LineIterator)}
+     * Create a SAM File Header from the preamble.
+     *
+     * Must be called after {@link #readActualHeader(LineIterator)} or an exception will be thrown
      * This method will return an empty SAMFileHeader if the preamble was empty.
      * @return Always returns a SAMFileHeader, even if it is empty or comments only.  Never {@code null}
      */
     public SAMFileHeader renderSamFileHeader() {
-
+        assertHeaderInitialized();
         if (isPreambleSamFileHeader(getPreamble())) {
             final List<String> samHeaderAsString = getPreamble().stream().map(p -> preambleLineStart + p).collect(Collectors.toList());
             return createSamFileHeader(samHeaderAsString);
@@ -464,16 +478,30 @@ public final class XsvLocatableTableCodec extends AsciiFeatureCodec<XsvTableFeat
         return result;
     }
 
-    // TODO: Put comments about how the header must have already been run to use this method.
+    /** Do not call before {@link #readActualHeader(LineIterator)} or exception will be thrown..
+     *
+     * @return the name of the contig column.  Never {@code null}.
+     */
     public String getContigColumn() {
+        assertHeaderInitialized();
         return finalContigColumn;
     }
 
+    /** Do not call before {@link #readActualHeader(LineIterator)} or exception will be thrown..
+     *
+     * @return the name of the start column.  Never {@code null}.
+     */
     public String getStartColumn() {
+        assertHeaderInitialized();
         return finalStartColumn;
     }
 
+    /** Do not call before {@link #readActualHeader(LineIterator)} or exception will be thrown..
+     *
+     * @return the name of the end column.  Never {@code null}.
+     */
     public String getEndColumn() {
+        assertHeaderInitialized();
         return finalEndColumn;
     }
 }
