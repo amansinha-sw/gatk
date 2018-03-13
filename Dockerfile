@@ -17,6 +17,8 @@ RUN java -jar gatk.jar -h
 WORKDIR /gatk
 # Create link to where test data is expected
 RUN ln -s /testdata src/test/resources
+# Create link to where large, runtime resources are expected
+RUN ln -s /largedata src/main/resources/large
 
 # Create a simple unit test runner
 ENV CI true
