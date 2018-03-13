@@ -194,6 +194,13 @@ public class CNNVariantScore extends VariantWalker {
             architectureFile.deleteOnExit();
             weightsHD5.deleteOnExit();
             architecture = architectureFile.getAbsolutePath();
+            System.out.println("JSON file: " + architecture);
+            try (final BufferedReader reader = new BufferedReader(new FileReader(architecture))) {
+                reader.lines().forEach(l -> System.out.println("JSON: " + l));
+            } catch (final IOException ioe) {
+                throw new GATKException("Cannot read architecture file.", ioe);
+            }
+
             weights = weightsHD5.getAbsolutePath();
         }
 
